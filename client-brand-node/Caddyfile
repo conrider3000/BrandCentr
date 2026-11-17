@@ -1,0 +1,22 @@
+# ==============================================================================
+# Caddyfile Opcional (Profile: standalone-caddy)
+# ATENÇÃO: Quando implantado via Coolify, o Traefik do Coolify já gerencia
+# as portas 80/443 e HTTPS para {$DOMAIN}, www.{$DOMAIN} e marca.{$DOMAIN}.
+# Não execute este container junto com o proxy do Coolify.
+# ==============================================================================
+
+{$DOMAIN:localhost}, www.{$DOMAIN:localhost} {
+    encode zstd gzip
+    request_body {
+        max_size 0
+    }
+    reverse_proxy node-web:3002
+}
+
+marca.{$DOMAIN:localhost} {
+    encode zstd gzip
+    request_body {
+        max_size 0
+    }
+    reverse_proxy node-web:3002
+}

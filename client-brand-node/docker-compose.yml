@@ -1,0 +1,92 @@
+services:
+  node-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DOMAIN=${DOMAIN:-auroracafe.com.br}
+      - AGENCY_HEARTBEAT_SECRET=${AGENCY_HEARTBEAT_SECRET:-dev-agency-heartbeat-secret-2026}
+      - NODE_ENCRYPTION_KEY=${NODE_ENCRYPTION_KEY:-client-node-aes256-secret-key-32-chars}
+      - PORTAL_CLIENT_EMAIL=${PORTAL_CLIENT_EMAIL:-equipe@auroracafe.com.br}
+      - PORTAL_CLIENT_PASSWORD=${PORTAL_CLIENT_PASSWORD:-MarcaAurora2026!}
+      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-google/gemini-2.5-flash}
+      - DEFAULT_IMAGE_MODEL=${DEFAULT_IMAGE_MODEL:-google/gemini-2.5-flash-image-preview}
+      - POCKETBASE_URL=${POCKETBASE_URL:-http://pocketbase:8090}
+      - AGENCY_R2_REMOTE=${AGENCY_R2_REMOTE:-agency-r2:brand-backups}
+      - CLIENT_CLOUD_REMOTE=${CLIENT_CLOUD_REMOTE:-client-drive:Brand-AI-Backup}
+    volumes:
+      - client_app_data:/app/data
+    depends_on:
+      - pocketbase
+    # Roteamento automático via Coolify/Traefik sem conflito na porta 80/443.
+    # O site novo substitui @ e www; o portal privado responde em marca.{$DOMAIN}.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.client-brand-node.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`marca.${DOMAIN}`)"
+      - "traefik.http.routers.client-brand-node.entrypoints=https"
+      - "traefik.http.routers.client-brand-node.tls=true"
+      - "traefik.http.routers.client-brand-node.tls.certresolver=letsencrypt"
+      - "traefik.http.services.client-brand-node.loadbalancer.server.port=3002"
+    networks:
+      - client_internal
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:0.25.9
+    restart: unless-stopped
+    command: --http=0.0.0.0:8090
+    volumes:
+      - client_pb_data:/pb_data
+      - ./pb_migrations:/pb_migrations:ro
+    networks:
+      - client_internal
+
+  # Motor de Backup em 3 Camadas (Local 7d + R2/B2 Agência + Google Drive/Dropbox Cliente)
+  # Sem AnythingLLM: economia de 1-2 GB de RAM na VPS de 4GB.
+  backup:
+    image: rclone/rclone:1.69
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup/backup.sh"]
+    environment:
+      - DOMAIN=${DOMAIN:-auroracafe.com.br}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+      - AGENCY_R2_REMOTE=${AGENCY_R2_REMOTE:-}
+      - CLIENT_CLOUD_REMOTE=${CLIENT_CLOUD_REMOTE:-}
+      - UPTIME_KUMA_PUSH_URL=${UPTIME_KUMA_PUSH_URL:-}
+    volumes:
+      - client_app_data:/source/app_data:ro
+      - client_pb_data:/source/pb_data:ro
+      - client_local_backups:/backups
+      - ./backup/backup.sh:/backup/backup.sh:ro
+      - ./backup/rclone.conf:/config/rclone/rclone.conf:ro
+    networks:
+      - client_internal
+
+  # Proxy Caddy somente fora do Coolify:
+  # docker compose --profile standalone-caddy up -d
+  caddy:
+    image: caddy:2.9-alpine
+    profiles: ["standalone-caddy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - client_caddy_data:/data
+      - client_caddy_config:/config
+    depends_on:
+      - node-web
+    networks:
+      - client_internal
+
+volumes:
+  client_app_data:
+  client_pb_data:
+  client_local_backups:
+  client_caddy_data:
+  client_caddy_config:
+
+networks:
+  client_internal:
+    driver: bridge

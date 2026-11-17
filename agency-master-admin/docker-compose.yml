@@ -1,0 +1,72 @@
+services:
+  master-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - ADMIN_DOMAIN=${ADMIN_DOMAIN:-admin.localhost}
+      - ADMIN_PANEL_USER=${ADMIN_PANEL_USER:-admin@suaagencia.com.br}
+      - ADMIN_PANEL_PASSWORD=${ADMIN_PANEL_PASSWORD:-TroqueEstaSenhaForte2026!}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-brand-ai-master-secret-key-32-chars-min}
+      - POCKETBASE_URL=${POCKETBASE_URL:-http://pocketbase:8090}
+      - POCKETBASE_ADMIN_EMAIL=${POCKETBASE_ADMIN_EMAIL:-admin@suaagencia.com.br}
+      - POCKETBASE_ADMIN_PASSWORD=${POCKETBASE_ADMIN_PASSWORD:-TroqueEstaSenhaPB2026!}
+      - COOLIFY_API_URL=${COOLIFY_API_URL:-http://host.docker.internal:8000/api/v1}
+      - COOLIFY_API_TOKEN=${COOLIFY_API_TOKEN:-}
+    volumes:
+      - master_app_data:/app/data
+    depends_on:
+      - pocketbase
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Labels padrão para roteamento automático via Coolify/Traefik (sem conflito 80/443)
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agency-master.rule=Host(`${ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.agency-master.entrypoints=https"
+      - "traefik.http.routers.agency-master.tls=true"
+      - "traefik.http.routers.agency-master.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agency-master.loadbalancer.server.port=3001"
+    networks:
+      - agency_internal
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:0.25.9
+    restart: unless-stopped
+    command: --http=0.0.0.0:8090
+    volumes:
+      - master_pb_data:/pb_data
+      - ./pb_migrations:/pb_migrations:ro
+      - ./pb_hooks:/pb_hooks:ro
+    networks:
+      - agency_internal
+
+  # Proxy Caddy somente se rodar fora do Coolify:
+  # docker compose --profile standalone-caddy up -d
+  caddy:
+    image: caddy:2.9-alpine
+    profiles: ["standalone-caddy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - master-web
+      - pocketbase
+    networks:
+      - agency_internal
+
+volumes:
+  master_app_data:
+  master_pb_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  agency_internal:
+    driver: bridge

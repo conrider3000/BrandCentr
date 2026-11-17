@@ -1,0 +1,23 @@
+# Dependencies & Next.js build outputs
+node_modules/
+.next/
+out/
+.vercel/
+
+# Environment variables & secrets
+.env
+.env.local
+.env.production.local
+client-brand-node/backup/rclone.conf
+
+# Local runtime databases & uploaded files
+agency-master-admin/data/
+client-brand-node/data/
+agency-master-admin/pb_data/
+client-brand-node/pb_data/
+
+# OS & Logs
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*

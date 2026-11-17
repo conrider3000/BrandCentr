@@ -1,0 +1,19 @@
+# ==============================================================================
+# Caddyfile Opcional (Profile: standalone-caddy)
+# ATENÇÃO: Em deploy via Coolify, o proxy Traefik do próprio Coolify já ocupa
+# as portas 80/443 e gerencia o HTTPS automaticamente. Não ative este Caddy
+# junto com o Traefik do Coolify para evitar conflito de portas.
+# ==============================================================================
+
+{$ADMIN_DOMAIN:admin.localhost} {
+    encode zstd gzip
+
+    handle /pb/* {
+        uri strip_prefix /pb
+        reverse_proxy pocketbase:8090
+    }
+
+    handle {
+        reverse_proxy master-web:3001
+    }
+}

@@ -1,0 +1,24 @@
+# ==============================================================================
+# Exemplo de rclone.conf para Backup em 3 Camadas (Copie para backup/rclone.conf)
+# Nota: iCloud NÃO é utilizado por falta de API oficial estável para servidores.
+# ==============================================================================
+
+# Camada 2: Cloudflare R2 (ou Backblaze B2) da Agência
+[agency-r2]
+type = s3
+provider = Cloudflare
+access_key_id = SEU_R2_ACCESS_KEY
+secret_access_key = SEU_R2_SECRET_KEY
+endpoint = https://SEU_ACCOUNT_ID.r2.cloudflarestorage.com
+acl = private
+
+# Camada 3 (Opção A): Google Drive do Cliente (autorize via `rclone authorize "drive"`)
+[client-drive]
+type = drive
+scope = drive.file
+token = {"access_token":"...","token_type":"Bearer","refresh_token":"...","expiry":"2026-12-31T00:00:00Z"}
+
+# Camada 3 (Opção B): Dropbox do Cliente (autorize via `rclone authorize "dropbox"`)
+[client-dropbox]
+type = dropbox
+token = {"access_token":"...","token_type":"bearer","expiry":"0001-01-01T00:00:00Z"}
